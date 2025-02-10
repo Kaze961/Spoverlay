@@ -89,23 +89,17 @@ def update_overlay(force=False):
 
     try:
         playback = sp.current_playback()
-        if not playback:
-            song_label.config(text="Keine Wiedergabe", fg="#e91e63")
+        if not playback or not playback["is_playing"]:
+            song_label.config(text="Keine Wiedergabe", fg="#ffffff")
             placeholder_img = ImageTk.PhotoImage(Image.open("placeholder.png").resize((150, 150), Image.LANCZOS))
             cover_label.config(image=placeholder_img)
             cover_label.image = placeholder_img
             progress_scale.config(state="disabled")
             time_label.config(text="0:00 / 0:00")
-            return
-
-        if not playback["is_playing"]:
-            song_label.config(text="Keine Wiedergabe", fg="#e91e63")
-            placeholder_img = ImageTk.PhotoImage(Image.open("placeholder.png").resize((150, 150), Image.LANCZOS))
-            cover_label.config(image=placeholder_img)
-            cover_label.image = placeholder_img
-            progress_scale.config(state="disabled")
-            time_label.config(text="0:00 / 0:00")
+            if not playback:
+                return
             play_pause_btn.config(image=tk_play)
+
         else:
             track = playback["item"]
             track_id = track["id"]
