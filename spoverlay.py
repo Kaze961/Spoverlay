@@ -201,6 +201,10 @@ def create_overlay():
     title_label = CTkLabel(title_bar, text="Spoverlay by Kaze", text_color="white", fg_color="#444444", font=("Arial", 13))
     title_label.pack(side=tk.LEFT, padx=5)
 
+    # Schließen-Button (X)
+    close_button = CTkButton(title_bar, text="X", text_color="white", fg_color="#444444", hover_color="#555555", width=20, height=20, command=close_overlay)
+    close_button.pack(side=tk.RIGHT, padx=5, pady=0)
+
     # Drag-and-Drop für die Titel-Leiste
     title_bar.bind("<ButtonPress-1>", start_move)
     title_bar.bind("<B1-Motion>", on_move)
