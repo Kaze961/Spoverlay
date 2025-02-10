@@ -54,8 +54,6 @@ def initialize_spotify():
         scope="user-modify-playback-state user-read-playback-state user-read-currently-playing"
     ))
 
-# **Fehlermeldung anzeigen**
-
 # **Play/Pause mit sofortigem Update**
 def play_pause():
     try:
@@ -282,7 +280,15 @@ def create_overlay():
         style="Custom.Horizontal.TScale",
         length=220
     )
-    volume_scale.set(50)
+
+    # Aktuelle Lautstärke von Spotify API abrufen und setzen
+    try:
+        current_volume = sp.current_playback()["device"]["volume_percent"]
+        volume_scale.set(current_volume)
+    except spotipy.exceptions.SpotifyException as e:
+        messagebox.showwarning("API-Warning", f"Spotify-API-Meldung: {e}")
+        print(f"Details: {e}")
+
     volume_scale.pack(pady=10)
 
 # **Hotkey-Steuerung**
