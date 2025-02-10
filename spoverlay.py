@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import *
 import customtkinter
-from customtkinter import CTk, CTkFrame, CTkLabel, CTkButton, CTkSlider, set_appearance_mode, set_default_color_theme, CTkImage
+from customtkinter import CTk, CTkFrame, CTkLabel, CTkButton, CTkSlider, set_appearance_mode, set_default_color_theme, CTkImage, CTkProgressBar
 from PIL import Image, ImageTk, ImageDraw
 import requests
 from io import BytesIO
@@ -30,13 +30,13 @@ config = load_config()
 SPOTIFY_CLIENT_ID = config["spotify_client_id"]
 SPOTIFY_CLIENT_SECRET = config["spotify_client_secret"]
 HOTKEY = config["hotkey"]
+THEME = config.get("theme", "dark-blue")  # Standardwert ist "dark-blue"
 
 # **Globale Variablen**
 overlay = None
 cover_label = None
 song_label = None
-progress_scale = None
-time_label = None
+progress_bar = None
 overlay_visible = False
 overlay_x, overlay_y = 100, 100
 dragging = False
@@ -79,7 +79,7 @@ def play_pause():
         messagebox.showwarning("API-Warning", f"Spotify-API-Meldung: {e}")
         print(f"Details: {e}")
 
-# **Overlay aktualisieren (Cover, Songtitel, Fortschritt & verbleibende Zeit)**
+# **Overlay aktualisieren (Cover, Songtitel, Fortschritt)**
 def update_overlay(force=False):
     global last_update_time, current_track_id, current_cover_url
 
@@ -95,8 +95,7 @@ def update_overlay(force=False):
             placeholder_img = ImageTk.PhotoImage(Image.open("placeholder.png").resize((150, 150), Image.LANCZOS))
             cover_label.configure(image=placeholder_img)
             cover_label.image = placeholder_img
-            progress_scale.configure(state="disabled")
-            time_label.configure(text="0:00 / 0:00")
+            progress_bar.set(0)
             if not playback:
                 return
             play_pause_btn.configure(image=tk_play)
@@ -128,11 +127,7 @@ def update_overlay(force=False):
                 cover_label.image = cover_img
 
             # Fortschrittsbalken aktualisieren
-            progress_scale.configure(state="normal", to=duration_ms / 1000)
-            progress_scale.set(progress_ms / 1000)
-            # Verbleibende Zeit anzeigen
-            remaining_time = (duration_ms - progress_ms) / 1000
-            time_label.configure(text=f"-{format_time(remaining_time)}")
+            progress_bar.set(progress_ms / duration_ms)
 
             play_pause_btn.configure(image=tk_pause)
 
@@ -162,11 +157,6 @@ def set_progress(value):
         messagebox.showwarning("API-Warning", f"Spotify-API-Meldung: {e}")
         print(f"Details: {e}")
 
-# **Zeitformatierung (Sekunden in MM:SS umwandeln)**
-def format_time(seconds):
-    minutes, seconds = divmod(int(seconds), 60)
-    return f"{minutes}:{seconds:02}"
-
 # **Fenster verschieben**
 def start_move(event):
     global dragging
@@ -191,7 +181,7 @@ def close_overlay():
 
 # **Overlay erstellen**
 def create_overlay():
-    global overlay, cover_label, song_label, volume_scale, progress_scale, time_label, tk_play, tk_pause, tk_next, play_pause_btn
+    global overlay, cover_label, song_label, volume_scale, progress_bar, tk_play, tk_pause, tk_next, play_pause_btn
 
     overlay = CTk()
     overlay.attributes('-topmost', True)
@@ -201,66 +191,59 @@ def create_overlay():
 
     # Stil für die Slider definieren
     set_appearance_mode("dark")
-    set_default_color_theme("dark-blue")
+    set_default_color_theme(THEME)
 
     # Titel-Leiste oben
     title_bar = CTkFrame(overlay, fg_color="#444444", height=25)
     title_bar.pack(fill=customtkinter.X)
 
     # Titel-Label
-    title_label = CTkLabel(title_bar, text="Spoverlay by Kaze", text_color="white", fg_color="#444444", font=("Arial", 10))
+    title_label = CTkLabel(title_bar, text="Spoverlay by Kaze", text_color="white", fg_color="#444444", font=("Arial", 13))
     title_label.pack(side=tk.LEFT, padx=5)
-
-    # Schließen-Button (X)
-    close_btn = CTkLabel(title_bar, text="X", text_color="white", fg_color="#444444", font=("Arial", 10), cursor="hand2")
-    close_btn.pack(side=tk.RIGHT, padx=5)
-    close_btn.bind("<Button-1>", lambda e: close_overlay())
 
     # Drag-and-Drop für die Titel-Leiste
     title_bar.bind("<ButtonPress-1>", start_move)
     title_bar.bind("<B1-Motion>", on_move)
     title_bar.bind("<ButtonRelease-1>", stop_move)
 
+    # Abstand zwischen Titel-Leiste und Cover-Bild
+    title_bar.pack(pady=(0, 20))
+
     # Cover-Bild
     cover_label = CTkLabel(overlay, fg_color="#333333", text=None)
     cover_label.pack(pady=5)  # Weniger Abstand
 
     # Songtitel
-    song_label = CTkLabel(overlay, text="Lade Titel...", text_color="white", fg_color="#333333", font=("Arial", 12), wraplength=280, justify="center")
-    song_label.pack(pady=2)  # Weniger Abstand
+    song_frame = CTkFrame(overlay, fg_color="#333333", corner_radius=5)
+    song_frame.pack(pady=2)  # Weniger Abstand
+
+    song_label = CTkLabel(song_frame, text="Lade Titel...", text_color="white", fg_color="#333333", font=("Arial", 12), wraplength=280, justify="center")
+    song_label.pack(padx=5, pady=5)  # Weniger Abstand
+
+    # Song-Dauer-Leiste
+    progress_bar = CTkProgressBar(
+        overlay,
+        width=220
+    )
+    progress_bar.pack(pady=10)
 
     # Steuerungsbuttons
     button_frame = CTkFrame(overlay, fg_color="#333")
     button_frame.pack(pady=2)  # Weniger Abstand
 
     tk_prev = ImageTk.PhotoImage(Image.open("prev_icon.png").resize((30, 30)))
-    tk_play = ImageTk.PhotoImage(Image.open("play_icon.png").resize((30, 30)))
-    tk_pause = ImageTk.PhotoImage(Image.open("pause_icon.png").resize((30, 30)))
+    tk_play = ImageTk.PhotoImage(Image.open("play_icon.png").resize((40, 40)))
+    tk_pause = ImageTk.PhotoImage(Image.open("pause_icon.png").resize((40, 40)))
     tk_next = ImageTk.PhotoImage(Image.open("next_icon.png").resize((30, 30)))
 
-    prev_btn = CTkButton(button_frame, image=tk_prev, command=lambda: [sp.previous_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=50)
+    prev_btn = CTkButton(button_frame, image=tk_prev, command=lambda: [sp.previous_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     prev_btn.grid(row=0, column=0, padx=5)
 
-    play_pause_btn = CTkButton(button_frame, image=tk_play, command=play_pause, fg_color="#333", hover_color="#444", text=None, width=70, height=50)
+    play_pause_btn = CTkButton(button_frame, image=tk_play, command=play_pause, fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     play_pause_btn.grid(row=0, column=1, padx=5)
 
-    next_btn = CTkButton(button_frame, image=tk_next, command=lambda: [sp.next_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=50)
+    next_btn = CTkButton(button_frame, image=tk_next, command=lambda: [sp.next_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     next_btn.grid(row=0, column=2, padx=5)
-
-    # Song-Dauer-Leiste
-    progress_scale = CTkSlider(
-        overlay,
-        from_=0,
-        to=100,
-        orientation="horizontal",
-        command=set_progress,
-        width=220
-    )
-    progress_scale.pack(pady=10)
-
-    # Label für die verbleibende Zeit
-    time_label = CTkLabel(overlay, text="0:00 / 0:00", text_color="white", fg_color="#333333", font=("Arial", 10))
-    time_label.pack(pady=5)
 
     # Spotify-ähnlicher Lautstärkeregler
     volume_scale = CTkSlider(
@@ -274,8 +257,12 @@ def create_overlay():
 
     # Aktuelle Lautstärke von Spotify API abrufen und setzen
     try:
-        current_volume = sp.current_playback()["device"]["volume_percent"]
-        volume_scale.set(current_volume)
+        playback = sp.current_playback()
+        if playback:
+            current_volume = playback["device"]["volume_percent"]
+            volume_scale.set(current_volume)
+        else:
+            messagebox.showwarning("Spotify-API-Error", "Es läuft derzeit keine Spotify-Wiedergabe.")
     except spotipy.exceptions.SpotifyException as e:
         messagebox.showwarning("API-Warning", f"Spotify-API-Meldung: {e}")
         print(f"Details: {e}")
