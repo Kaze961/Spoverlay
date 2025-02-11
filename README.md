@@ -9,7 +9,4 @@ Config-File:
     "theme": "green" # Themes: "blue", "green", "dark-blue"
 }
 ```
-<br/>
-<br/>
-![demo](https://github.com/user-attachments/assets/9397d12e-d21b-4079-ad8a-883e1ca09341)
 
