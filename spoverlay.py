@@ -1,3 +1,5 @@
+import sys
+import os
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter
@@ -14,18 +16,34 @@ import threading
 import webbrowser
 from flask import Flask, request, redirect
 
+# -------------------------------
+# Hilfsfunktion zur Ermittlung des Ressourcenpfads
+# -------------------------------
+def resource_path(relative_path):
+    """
+    Liefert den absoluten Pfad zur Ressource, funktioniert sowohl im
+    Entwicklungsmodus als auch bei gebündelten EXE-Dateien mit PyInstaller.
+    """
+    try:
+        # Bei einem gebündelten EXE enthält sys._MEIPASS den Pfad zum temporären Ordner.
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # Andernfalls wird das aktuelle Arbeitsverzeichnis verwendet.
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 # --- Konfiguration laden ---
 def load_config():
-    """Lädt die Konfiguration aus der config.json Datei."""
     try:
-        with open("config.json", "r") as config_file:
-            return json.load(config_file)
+        with open(resource_path('config.json'), 'r') as file:
+            config = json.load(file)
+        return config
     except FileNotFoundError:
-        print("Fehler: Konfigurationsdatei 'config.json' nicht gefunden.")
-        exit(1)
+        print("Config file not found.")
+        sys.exit(1)  # sys.exit verwenden anstelle von exit
     except json.JSONDecodeError:
-        print("Fehler: Ungültiges JSON-Format in der Konfigurationsdatei.")
-        exit(1)
+        print("Error decoding the config file.")
+        sys.exit(1)
 
 config = load_config()
 SPOTIFY_CLIENT_ID = config["spotify_client_id"]
@@ -131,7 +149,9 @@ def update_overlay(force=False):
         playback = sp.current_playback()
         if not playback or not playback["is_playing"]:
             song_label.configure(text="Keine Wiedergabe", text_color="#ffffff")
-            placeholder_img = ImageTk.PhotoImage(Image.open("placeholder.png").resize((150, 150), Image.LANCZOS))
+            placeholder_img = ImageTk.PhotoImage(
+                Image.open(resource_path("placeholder.png")).resize((150, 150), Image.LANCZOS)
+            )
             cover_label.configure(image=placeholder_img)
             cover_label.image = placeholder_img
             progress_bar.set(0)
@@ -218,6 +238,7 @@ def create_overlay():
     overlay.configure(bg='#333333')
     set_appearance_mode("dark")
     set_default_color_theme(THEME)
+    
     title_bar = CTkFrame(overlay, fg_color="#444444", height=25)
     title_bar.pack(fill=customtkinter.X)
     title_label = CTkLabel(title_bar, text="Spoverlay by Kaze", text_color="white", fg_color="#444444", font=("Arial", 13))
@@ -228,26 +249,31 @@ def create_overlay():
     title_bar.bind("<B1-Motion>", on_move)
     title_bar.bind("<ButtonRelease-1>", stop_move)
     title_bar.pack(pady=(0, 20))
+    
     cover_label = CTkLabel(overlay, fg_color="#333333", text=None)
     cover_label.pack(pady=5)
+    
     song_frame = CTkFrame(overlay, fg_color="#333333", corner_radius=5)
     song_frame.pack(pady=2)
     song_label = CTkLabel(song_frame, text="Lade Titel...", text_color="white", fg_color="#333333", font=("Arial", 12), wraplength=280, justify="center")
     song_label.pack(padx=5, pady=5)
+    
     progress_bar = CTkProgressBar(overlay, width=220)
     progress_bar.pack(pady=10)
+    
     button_frame = CTkFrame(overlay, fg_color="#333")
     button_frame.pack(pady=2)
-    tk_prev = ImageTk.PhotoImage(Image.open("prev_icon.png").resize((30, 30)))
-    tk_play = ImageTk.PhotoImage(Image.open("play_icon.png").resize((40, 40)))
-    tk_pause = ImageTk.PhotoImage(Image.open("pause_icon.png").resize((40, 40)))
-    tk_next = ImageTk.PhotoImage(Image.open("next_icon.png").resize((30, 30)))
+    tk_prev = ImageTk.PhotoImage(Image.open(resource_path("prev_icon.png")).resize((30, 30)))
+    tk_play = ImageTk.PhotoImage(Image.open(resource_path("play_icon.png")).resize((40, 40)))
+    tk_pause = ImageTk.PhotoImage(Image.open(resource_path("pause_icon.png")).resize((40, 40)))
+    tk_next = ImageTk.PhotoImage(Image.open(resource_path("next_icon.png")).resize((30, 30)))
     prev_btn = CTkButton(button_frame, image=tk_prev, command=lambda: [sp.previous_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     prev_btn.grid(row=0, column=0, padx=5)
     play_pause_btn = CTkButton(button_frame, image=tk_play, command=play_pause, fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     play_pause_btn.grid(row=0, column=1, padx=5)
     next_btn = CTkButton(button_frame, image=tk_next, command=lambda: [sp.next_track(), time.sleep(0.5), update_overlay(force=True)], fg_color="#333", hover_color="#444", text=None, width=70, height=60)
     next_btn.grid(row=0, column=2, padx=5)
+    
     volume_scale = CTkSlider(overlay, from_=0, to=100, orientation="horizontal", command=set_volume, width=220)
     try:
         playback = sp.current_playback()
@@ -277,26 +303,31 @@ def on_press(key):
 
 # --- Hauptprogramm ---
 if __name__ == "__main__":
-    # Starte den Flask-Server in einem separaten Thread
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    # Öffne automatisch den Browser zur Flask-App (auf Port 8080)
-    if not sp_oauth.get_cached_token():
-        webbrowser.open("http://localhost:8080/")
-    
-    # Warte, bis der Token im Cache vorhanden ist
-    print("Warte auf Token...")
-    while not sp_oauth.get_cached_token():
-        time.sleep(1)
-    print("Token gefunden!")
-    
-    # Initialisiere das Spotify-API-Objekt (das den Token aus dem Cache verwendet)
-    sp = initialize_spotify()
-    
-    # Erstelle das Overlay und starte den Hotkey-Listener
-    create_overlay()
-    overlay.withdraw()
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-    overlay.mainloop()
+    try:
+        # Starte den Flask-Server in einem separaten Thread
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        
+        # Öffne automatisch den Browser zur Flask-App (auf Port 8080)
+        if not sp_oauth.get_cached_token():
+            webbrowser.open("http://localhost:8080/")
+        
+        # Warte, bis der Token im Cache vorhanden ist
+        print("Warte auf Token...")
+        while not sp_oauth.get_cached_token():
+            time.sleep(1)
+        print("Token gefunden!")
+        
+        # Initialisiere das Spotify-API-Objekt (das den Token aus dem Cache verwendet)
+        sp = initialize_spotify()
+        
+        # Erstelle das Overlay und starte den Hotkey-Listener
+        create_overlay()
+        overlay.withdraw()
+        listener = keyboard.Listener(on_press=on_press)
+        listener.start()
+        overlay.mainloop()
+    except Exception as e:
+        print(f"Ein Fehler ist aufgetreten: {e}")
+    finally:
+        input("Drücken Sie die Eingabetaste, um das Fenster zu schließen...")
