@@ -294,6 +294,7 @@ def on_press(key):
         if key.char == HOTKEY and not overlay_visible:
             overlay_visible = True
             overlay.deiconify()
+            overlay.focus_force()  # Setzt den Fokus auf das Overlay-Fenster
             update_overlay(force=True)
         elif key.char == HOTKEY and overlay_visible:
             overlay_visible = False
